@@ -67,6 +67,19 @@ Point3D intersectLines(const Line &l1, const Line &l2) {
 
 // Ribbon definition & import from file
 
+class Boundary : public CurveType {
+public:
+  Boundary(const BSCurve &curve) : curve(curve) { }
+  Point3D eval(double u) const override { return curve.eval(u); }
+  Vector3D evalDerivative(double u) const override {
+    VectorVector der;
+    curve.eval(u, 1, der);
+    return der[1];
+  }
+private:
+  BSCurve curve;
+};
+
 class NormalFence : public CurveType {
 public:
   NormalFence(const BSCurve &outer, const BSCurve &inner)
@@ -119,15 +132,16 @@ auto readBoundaries(std::string filename) {
 
   size_t n;
   f >> n;
-  std::vector<std::shared_ptr<CurveType>> result;
+  std::vector<std::shared_ptr<CurveType>> boundaries, fences;
 
   for (size_t i = 0; i < n; ++i) {
     auto outer = readCurve(f); outer.normalize();
     auto inner = readCurve(f); inner.normalize();
-    result.push_back(std::make_shared<NormalFence>(outer, inner));
+    boundaries.push_back(std::make_shared<Boundary>(outer));
+    fences.push_back(std::make_shared<NormalFence>(outer, inner));
   }
 
-  return result;
+  return std::make_pair(boundaries, fences);
 }
 
 
@@ -143,9 +157,11 @@ int main(int argc, char **argv) {
   if (argc == 3)
     resolution = std::atoi(argv[2]);
 
-  auto boundaries = readBoundaries(argv[1]);
-  C0Coons surface(boundaries);
+  auto [boundaries, fence] = readBoundaries(argv[1]);
+  C0Coons base(boundaries);
+  C0Coons surface(fence);
 
+  auto bmesh = base.eval(resolution);
   auto mesh = surface.eval(resolution);
   auto params = surface.parameters(resolution);
   auto n = params.size();
@@ -154,8 +170,8 @@ int main(int argc, char **argv) {
   for (size_t i = 0; i < n; ++i) {
     if (surface.onEdge(resolution, i)) {
       // On edge -> point and normal known a priori
-      mesh[i] = Point3D(0,0,0);
-      // TODO
+      normals[i] = spointToPlane(mesh[i]).n;
+      mesh[i] = bmesh[i];
     } else {
       // Not on edge -> normal from the mesh point, point from intersection
       auto p = spointToPlane(mesh[i]);
