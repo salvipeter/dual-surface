@@ -15,13 +15,16 @@ struct Line {
   Vector3D d; // unit tangent
 };
 
-using SPoint = Point3D; // spherical point
-// represents a plane with (r, theta, phi) s.t.:
-//         r       is the distance to the origin
-//   (theta, phi) are the spherical coordinates of the unit normal
+using SPoint = Point3D; // dual point
+
+#define ISOTROPIC
 
 SPoint planeToSPoint(const Plane &p) {
   auto r = p.p * p.n;
+#ifdef ISOTROPIC
+  auto d = 1.0 / (1.0 - p.n[2]);
+  return { p.n[0] * d, p.n[1] * d, r * d };
+#else
   auto theta = std::acos(p.n[2]), phi = 0.0;
   auto tmp = p.n;
   tmp[2] = 0;
@@ -29,14 +32,24 @@ SPoint planeToSPoint(const Plane &p) {
   if (denom > 0)
     phi = std::acos(p.n[0] / tmp.norm()) * (p.n[1] < 0 ? -1 : 1);
   return { r, theta, phi };
+#endif
 }
 
 Plane spointToPlane(const SPoint &s) {
   Plane p;
+#ifdef ISOTROPIC
+  auto d = 1.0 / (1.0 + s[0] * s[0] + s[1] * s[1]);
+  p.n[0] = 2.0 * s[0] * d;
+  p.n[1] = 2.0 * s[1] * d;
+  p.n[2] = (1.0 - s[0] * s[0] - s[1] * s[1]) * d;
+  auto r = 2.0 * s[2] * d;
+  p.p = p.n * r;
+#else
   p.n[0] = std::sin(s[1]) * std::cos(s[2]);
   p.n[1] = std::sin(s[1]) * std::sin(s[2]);
   p.n[2] = std::cos(s[1]);
   p.p = p.n * s[0];
+#endif
   return p;
 }
 
@@ -184,8 +197,5 @@ int main(int argc, char **argv) {
     }
   }
 
-  auto sik = spointToPlane(mesh[0]);
-  std::cout << "p: " << sik.p << std::endl;
-  std::cout << "n: " << sik.n << std::endl;
   mesh.writeOBJ("/tmp/surface.obj");
 }
