@@ -17,7 +17,7 @@ struct Line {
 
 using SPoint = Point3D; // dual point
 
-#define ISOTROPIC
+//#define ISOTROPIC
 
 SPoint planeToSPoint(const Plane &p) {
   auto r = p.p * p.n;
@@ -54,8 +54,11 @@ Plane spointToPlane(const SPoint &s) {
 }
 
 Line intersectPlanes(const Plane &p1, const Plane &p2) {
+  auto s1 = p1.p * p1.n, s2 = p2.p * p2.n, c = p1.n * p2.n, d = c * c - 1;
+  auto a = (s2 * c - s1 * 1) / d;
+  auto b = (s1 * c - s2 * 1) / d;
   Line l;
-  l.p = p2.p - p1.n * ((p2.p - p1.p) * p1.n);
+  l.p = p1.n * a + p2.n * b;
   l.d = p1.n ^ p2.n;
   auto denom = l.d.norm();
   if (denom > 0)
@@ -187,9 +190,10 @@ int main(int argc, char **argv) {
       mesh[i] = bmesh[i];
     } else {
       // Not on edge -> normal from the mesh point, point from intersection
+      auto d = 1e-6;
       auto p = spointToPlane(mesh[i]);
-      auto p1 = spointToPlane(surface.eval(params[i] + Vector2D(epsilon, 0)));
-      auto p2 = spointToPlane(surface.eval(params[i] + Vector2D(0, epsilon)));
+      auto p1 = spointToPlane(surface.eval(params[i] + Vector2D(d, 0)));
+      auto p2 = spointToPlane(surface.eval(params[i] + Vector2D(0, d)));
       auto l1 = intersectPlanes(p, p1);
       auto l2 = intersectPlanes(p, p2);
       mesh[i] = intersectLines(l1, l2);
